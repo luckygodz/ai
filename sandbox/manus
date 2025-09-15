@@ -1,0 +1,13 @@
+ubuntu@ac51ce974863
+-------------------
+    .--.       OS: Ubuntu 22.04.5 LTS
+   |o_o |      Host: ac51ce974863
+   |:_/ |      Kernel: 6.1.102
+  //   \ \     Uptime: 30 mins
+ (|     | )    Packages: 818 (dpkg)
+/\'\_   _/`\    Shell: bash
+\___)=(___/    Terminal: xterm-256color
+               CPU: Intel Xeon Processor @ 2.50GHz (4)
+               GPU: N/A
+               Memory: 948MiB / 3942MiB
+               Disk (/): 10.6GiB / 42.2GiB (25.1%)
