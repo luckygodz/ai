@@ -1,0 +1,258 @@
+#!/usr/bin/env python3
+#
+# PyFetch: Made by Luckygodz on GitHub
+# Inspired by Neofetch.
+#
+
+import os
+import platform
+import socket
+import getpass
+import datetime
+import re
+import sys
+from pathlib import Path
+
+# --- Dependency Check ---
+try:
+    import psutil
+except ImportError:
+    print("Error: The 'psutil' library is required but not found in this environment.")
+    print("Please install it from a local package if available.")
+    sys.exit(1)
+
+# --- Helper Functions (Offline-safe) ---
+
+def get_uptime():
+    """Returns the system uptime in a human-readable format."""
+    try:
+        boot_time_timestamp = psutil.boot_time()
+        boot_dt = datetime.datetime.fromtimestamp(boot_time_timestamp)
+        now_dt = datetime.datetime.now()
+        uptime_delta = now_dt - boot_dt
+
+        days = uptime_delta.days
+        hours, remainder = divmod(uptime_delta.seconds, 3600)
+        minutes, _ = divmod(remainder, 60)
+
+        parts = []
+        if days > 0: parts.append(f"{days} day{'s' if days > 1 else ''}")
+        if hours > 0: parts.append(f"{hours} hour{'s' if hours > 1 else ''}")
+        if minutes > 0: parts.append(f"{minutes} min{'s' if minutes > 1 else ''}")
+        
+        return ", ".join(parts) if parts else "less than a minute"
+    except Exception:
+        return "N/A"
+
+def get_memory_info():
+    """Returns memory usage as 'used MiB / total MiB'."""
+    try:
+        mem = psutil.virtual_memory()
+        total_mib = mem.total / (1024 * 1024)
+        used_mib = (mem.total - mem.available) / (1024 * 1024)
+        return f"{used_mib:.0f}MiB / {total_mib:.0f}MiB"
+    except Exception:
+        return "N/A"
+
+def get_cpu_info():
+    """Returns CPU model and core count."""
+    model = "N/A"
+    try:
+        if platform.system() == "Linux":
+            with open('/proc/cpuinfo') as f:
+                for line in f:
+                    if "model name" in line:
+                        model = re.sub(".*model name.*:", "", line, 1).strip()
+                        model = model.replace("(TM)", "").replace("(R)", "").replace(" CPU", "")
+                        model = " ".join(model.split())
+                        break
+        elif platform.system() == "Darwin":
+            model = os.popen("sysctl -n machdep.cpu.brand_string").read().strip()
+        elif platform.system() == "Windows":
+            model = platform.processor()
+
+        logical_cores = psutil.cpu_count(logical=True)
+        return f"{model} ({logical_cores})"
+    except Exception:
+        return f"{model} ({psutil.cpu_count(logical=True)})" if model != "N/A" else "N/A"
+
+def get_os_info():
+    """Returns the OS name and version from local files."""
+    system = platform.system()
+    if system == "Linux":
+        try:
+            with open("/etc/os-release") as f:
+                for line in f:
+                    if line.startswith("PRETTY_NAME="):
+                        return line.split('=', 1)[1].strip().strip('"')
+        except FileNotFoundError:
+            return f"{platform.system()} {platform.release()}"
+    elif system == "Darwin":
+        return f"macOS {platform.mac_ver()[0]}"
+    elif system == "Windows":
+        return f"{platform.system()} {platform.release()}"
+    return f"{platform.system()} {platform.release()}"
+
+def get_shell_info():
+    """Returns the current shell."""
+    try:
+        shell_path = os.environ.get("SHELL", "N/A")
+        if shell_path == "N/A":
+            return os.environ.get("ComSpec", "N/A")
+        return os.path.basename(shell_path)
+    except Exception:
+        return "N/A"
+
+def get_disk_info():
+    """Returns disk usage for the root partition."""
+    try:
+        disk = psutil.disk_usage('/')
+        total_gb = disk.total / (1024 * 1024 * 1024)
+        used_gb = disk.used / (1024 * 1024 * 1024)
+        return f"{used_gb:.1f}GiB / {total_gb:.1f}GiB ({disk.percent}%)"
+    except Exception:
+        return "N/A"
+
+def get_gpu_info():
+    """Attempts to get GPU information."""
+    if platform.system() == "Linux":
+        try:
+            # lspci is a standard tool for this
+            lspci_out = os.popen("lspci -v | grep -i 'vga compatible controller'").read()
+            if lspci_out:
+                # Extract the name
+                match = re.search(r":\s(.*?)\s\[", lspci_out)
+                if match:
+                    return match.group(1).strip()
+            # Fallback for virtual environments without lspci or specific hardware
+            glx_out = os.popen("glxinfo | grep 'OpenGL renderer string'").read()
+            if glx_out:
+                return glx_out.split(":")[1].strip()
+        except Exception:
+            pass # Fall through if commands fail
+    elif platform.system() == "Darwin":
+        try:
+            # system_profiler provides detailed hardware info on macOS
+            gpu_out = os.popen("system_profiler SPDisplaysDataType | grep 'Chipset Model'").read()
+            if gpu_out:
+                return gpu_out.split(":")[1].strip()
+        except Exception:
+            pass
+    elif platform.system() == "Windows":
+        try:
+            # wmic is the command-line tool for WMI on Windows
+            gpu_out = os.popen("wmic path win32_videocontroller get name").read()
+            # The output has a header and extra whitespace
+            gpus = gpu_out.strip().split('\n')[1:]
+            return ", ".join([gpu.strip() for gpu in gpus if gpu.strip()])
+        except Exception:
+            pass
+    return "N/A"
+
+def get_package_count():
+    """Counts installed packages for common managers."""
+    if platform.system() == "Linux":
+        # Check for dpkg (Debian/Ubuntu)
+        if os.path.exists('/usr/bin/dpkg'):
+            try:
+                count = len(os.popen("dpkg -l | grep '^ii'").readlines())
+                return f"{count} (dpkg)"
+            except Exception: pass
+        # Check for rpm (Fedora/CentOS/RHEL)
+        if os.path.exists('/usr/bin/rpm'):
+            try:
+                count = len(os.popen("rpm -qa").readlines())
+                return f"{count} (rpm)"
+            except Exception: pass
+        # Check for pacman (Arch)
+        if os.path.exists('/usr/bin/pacman'):
+            try:
+                count = len(os.popen("pacman -Q").readlines())
+                return f"{count} (pacman)"
+            except Exception: pass
+    return "N/A"
+
+def get_terminal_info():
+    """Gets the terminal emulator name."""
+    return os.environ.get("TERM", "N/A")
+
+def get_title():
+    """Returns the title string 'user@hostname'."""
+    try: user = getpass.getuser()
+    except Exception: user = "N/A"
+    try: hostname = socket.gethostname()
+    except Exception: hostname = "localhost"
+    return f"{user}@{hostname}"
+
+# --- ASCII Art and Colors ---
+
+class Colors:
+    RESET = "\033[0m"
+    BOLD = "\033[1m"
+    BLUE = "\033[94m"
+    CYAN = "\033[96m"
+
+def get_distro_ascii():
+    """Returns ASCII art based on the OS."""
+    system = platform.system().lower()
+    if "linux" in system:
+        return [
+            "    .--.    ",
+            "   |o_o |   ",
+            "   |:_/ |   ",
+            "  //   \\ \\  ",
+            " (|     | ) ",
+            "/'\\_   _/`\\ ",
+            "\\___)=(___/"
+        ]
+    elif "darwin" in system:
+        return [
+            "        .:'         ", "    __ :'__        ", " .'`__`-'__``.      ",
+            ":__________.-'      ", ":_________:         ", ":_________:         ",
+            " :________`·.       ", "  `·._.·'´         "
+        ]
+    elif "windows" in system:
+        return [
+            "████████  ████████", "████████  ████████", "████████  ████████",
+            "████████  ████████", "", "████████  ████████", "████████  ████████",
+            "████████  ████████", "████████  ████████",
+        ]
+    else: return ["???"]
+
+# --- Main Display Logic ---
+
+def main():
+    """Gathers and prints all system information."""
+    
+    info = {
+        "OS": get_os_info(),
+        "Host": platform.node(),
+        "Kernel": platform.release(),
+        "Uptime": get_uptime(),
+        "Packages": get_package_count(),
+        "Shell": get_shell_info(),
+        "Terminal": get_terminal_info(),
+        "CPU": get_cpu_info(),
+        "GPU": get_gpu_info(),
+        "Memory": get_memory_info(),
+        "Disk (/)": get_disk_info(),
+    }
+    
+    title = get_title()
+    ascii_art = get_distro_ascii()
+    
+    print(f"{Colors.CYAN}{Colors.BOLD}{title}{Colors.RESET}")
+    print(f"{Colors.CYAN}{'-' * len(title)}{Colors.RESET}")
+    
+    info_lines = [f"{Colors.CYAN}{Colors.BOLD}{key}:{Colors.RESET} {value}" for key, value in info.items()]
+    max_art_width = max(len(line) for line in ascii_art) if ascii_art else 0
+    
+    max_lines = max(len(ascii_art), len(info_lines))
+    
+    for i in range(max_lines):
+        art_line = f"{Colors.BLUE}{ascii_art[i]:<{max_art_width}}{Colors.RESET}" if i < len(ascii_art) else " " * max_art_width
+        info_line = info_lines[i] if i < len(info_lines) else ""
+        print(f"{art_line}   {info_line}")
+
+if __name__ == "__main__":
+    main()
