@@ -1,0 +1,13 @@
+sandbox@d6176688b399
+--------------------
+    .--.        OS: Debian GNU/Linux 12 (bookworm)
+   |o_o |       Host: d6176688b399
+   |:_/ |       Kernel: 4.4.0
+  //   \ \      Uptime: 6 mins
+ (|     | )     Packages: N/A (sandboxed)
+ /'\_   _/`\    Shell: N/A
+ \___)=(___/    Terminal: xterm-color
+                CPU: unknown (56)
+                GPU: N/A (sandboxed)
+                Memory: 159MiB / 4096MiB
+                Disk (/): 0.0GiB / 8589934592.0GiB (0.0%)
